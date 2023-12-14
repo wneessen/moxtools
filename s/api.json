@@ -1,0 +1,1789 @@
+{
+	"Name": "API",
+	"Docs": "",
+	"Functions": [
+		{
+			"Name": "SPFCheck",
+			"Docs": "",
+			"Params": [
+				{
+					"Name": "domain",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ipstr",
+					"Typewords": [
+						"string"
+					]
+				}
+			],
+			"Returns": [
+				{
+					"Name": "received",
+					"Typewords": [
+						"SPFReceived"
+					]
+				},
+				{
+					"Name": "dom",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "explanation",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "authentic",
+					"Typewords": [
+						"bool"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DKIMLookup",
+			"Docs": "",
+			"Params": [
+				{
+					"Name": "selector",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "domain",
+					"Typewords": [
+						"string"
+					]
+				}
+			],
+			"Returns": [
+				{
+					"Name": "status",
+					"Typewords": [
+						"DKIMStatus"
+					]
+				},
+				{
+					"Name": "record",
+					"Typewords": [
+						"nullable",
+						"Record"
+					]
+				},
+				{
+					"Name": "txt",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "authentic",
+					"Typewords": [
+						"bool"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DKIMVerify",
+			"Docs": "",
+			"Params": [
+				{
+					"Name": "message",
+					"Typewords": [
+						"string"
+					]
+				}
+			],
+			"Returns": [
+				{
+					"Name": "r0",
+					"Typewords": [
+						"[]",
+						"DKIMResult"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainCheck",
+			"Docs": "",
+			"Params": [
+				{
+					"Name": "domain",
+					"Typewords": [
+						"string"
+					]
+				}
+			],
+			"Returns": [
+				{
+					"Name": "dr",
+					"Typewords": [
+						"DomainResult"
+					]
+				}
+			]
+		}
+	],
+	"Sections": [],
+	"Structs": [
+		{
+			"Name": "SPFReceived",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Status",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Mechanism",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Domain",
+			"Docs": "Domain is a domain name, with one or more labels, with at least an ASCII\nrepresentation, and for IDNA non-ASCII domains a unicode representation.\nThe ASCII string must be used for DNS lookups. The strings do not have a\ntrailing dot. When using with StrictResolver, add the trailing dot.",
+			"Fields": [
+				{
+					"Name": "ASCII",
+					"Docs": "A non-unicode domain, e.g. with A-labels (xn--...) or NR-LDH (non-reserved letters/digits/hyphens) labels. Always in lower case. No trailing dot.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Unicode",
+					"Docs": "Name as U-labels. Empty if this is an ASCII-only domain. No trailing dot.",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Record",
+			"Docs": "Record is a DKIM DNS record, served on \u003cselector\u003e._domainkey.\u003cdomain\u003e for a\ngiven selector and domain (s= and d= in the DKIM-Signature).\n\nThe record is a semicolon-separated list of \"=\"-separated field value pairs.\nStrings should be compared case-insensitively, e.g. k=ed25519 is equivalent to k=ED25519.\n\nExample:\n\n\tv=DKIM1;h=sha256;k=ed25519;p=ln5zd/JEX4Jy60WAhUOv33IYm2YZMyTQAdr9stML504=",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "Version, fixed \"DKIM1\" (case sensitive). Field \"v\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Hashes",
+					"Docs": "Acceptable hash algorithms, e.g. \"sha1\", \"sha256\". Optional, defaults to all algorithms. Field \"h\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "Key",
+					"Docs": "Key type, \"rsa\" or \"ed25519\". Optional, default \"rsa\". Field \"k\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Notes",
+					"Docs": "Debug notes. Field \"n\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Pubkey",
+					"Docs": "Public key, as base64 in record. If empty, the key has been revoked. Field \"p\".",
+					"Typewords": [
+						"[]",
+						"uint8"
+					]
+				},
+				{
+					"Name": "Services",
+					"Docs": "Service types. Optional, default \"*\" for all services. Other values: \"email\". Field \"s\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "Flags",
+					"Docs": "Flags, colon-separated. Optional, default is no flags. Other values: \"y\" for testing DKIM, \"s\" for \"i=\" must have same domain as \"d\" in signatures. Field \"t\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DKIMResult",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Status",
+					"Docs": "",
+					"Typewords": [
+						"DKIMStatus"
+					]
+				},
+				{
+					"Name": "Sig",
+					"Docs": "Parsed form of DKIM-Signature header. Can be nil for invalid DKIM-Signature header.",
+					"Typewords": [
+						"nullable",
+						"Sig"
+					]
+				},
+				{
+					"Name": "Record",
+					"Docs": "Parsed form of DKIM DNS record for selector and domain in Sig. Optional.",
+					"Typewords": [
+						"nullable",
+						"Record"
+					]
+				},
+				{
+					"Name": "RecordAuthentic",
+					"Docs": "Whether DKIM DNS record was DNSSEC-protected. Only valid if Sig is non-nil.",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "If Status is not StatusPass, this error holds the details and can be checked using errors.Is.",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Sig",
+			"Docs": "Sig is a DKIM-Signature header.\n\nString values must be compared case insensitively.",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "Required fields.; Version, 1. Field \"v\". Always the first field.",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "AlgorithmSign",
+					"Docs": "\"rsa\" or \"ed25519\". Field \"a\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "AlgorithmHash",
+					"Docs": "\"sha256\" or the deprecated \"sha1\" (deprecated). Field \"a\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Signature",
+					"Docs": "Field \"b\".",
+					"Typewords": [
+						"[]",
+						"uint8"
+					]
+				},
+				{
+					"Name": "BodyHash",
+					"Docs": "Field \"bh\".",
+					"Typewords": [
+						"[]",
+						"uint8"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "Field \"d\".",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "SignedHeaders",
+					"Docs": "Duplicates are meaningful. Field \"h\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "Selector",
+					"Docs": "Selector, for looking DNS TXT record at \u003cs\u003e._domainkey.\u003cdomain\u003e. Field \"s\".",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "Canonicalization",
+					"Docs": "Optional fields. Canonicalization is the transformation of header and/or body before hashing. The value is in original case, but must be compared case-insensitively. Normally two slash-separated values: header canonicalization and body canonicalization. But the \"simple\" means \"simple/simple\" and \"relaxed\" means \"relaxed/simple\". Field \"c\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Length",
+					"Docs": "Body length to verify, default -1 for whole body. Field \"l\".",
+					"Typewords": [
+						"int64"
+					]
+				},
+				{
+					"Name": "Identity",
+					"Docs": "AUID (agent/user id). If nil and an identity is needed, should be treated as an Identity without localpart and Domain from d= field. Field \"i\".",
+					"Typewords": [
+						"nullable",
+						"Identity"
+					]
+				},
+				{
+					"Name": "QueryMethods",
+					"Docs": "For public key, currently known value is \"dns/txt\" (should be compared case-insensitively). If empty, dns/txt must be assumed. Field \"q\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "SignTime",
+					"Docs": "Unix epoch. -1 if unset. Field \"t\".",
+					"Typewords": [
+						"int64"
+					]
+				},
+				{
+					"Name": "ExpireTime",
+					"Docs": "Unix epoch. -1 if unset. Field \"x\".",
+					"Typewords": [
+						"int64"
+					]
+				},
+				{
+					"Name": "CopiedHeaders",
+					"Docs": "Copied header fields. Field \"z\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Identity",
+			"Docs": "Identity is used for the optional i= field in a DKIM-Signature header. It uses\nthe syntax of an email address, but does not necessarily represent one.",
+			"Fields": [
+				{
+					"Name": "Localpart",
+					"Docs": "Optional.",
+					"Typewords": [
+						"nullable",
+						"Localpart"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainResult",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "SPF",
+					"Docs": "",
+					"Typewords": [
+						"DomainSPF"
+					]
+				},
+				{
+					"Name": "DMARC",
+					"Docs": "",
+					"Typewords": [
+						"DomainDMARC"
+					]
+				},
+				{
+					"Name": "TLSRPT",
+					"Docs": "",
+					"Typewords": [
+						"DomainTLSRPT"
+					]
+				},
+				{
+					"Name": "MTASTS",
+					"Docs": "",
+					"Typewords": [
+						"DomainMTASTS"
+					]
+				},
+				{
+					"Name": "MX",
+					"Docs": "",
+					"Typewords": [
+						"DomainMX"
+					]
+				},
+				{
+					"Name": "MXHosts",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"DomainMXHost"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainSPF",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Status",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "TXT",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Record",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"SPFRecord"
+					]
+				},
+				{
+					"Name": "Authentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "SPFRecord",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "Must be \"spf1\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Directives",
+					"Docs": "An IP is evaluated against each directive until a match is found.",
+					"Typewords": [
+						"[]",
+						"Directive"
+					]
+				},
+				{
+					"Name": "Redirect",
+					"Docs": "Modifier that redirects SPF checks to other domain after directives did not match. Optional. For \"redirect=\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Explanation",
+					"Docs": "Modifier for creating a user-friendly error message when an IP results in status \"fail\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Other",
+					"Docs": "Other modifiers.",
+					"Typewords": [
+						"[]",
+						"Modifier"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Directive",
+			"Docs": "Directive consists of a mechanism that describes how to check if an IP matches,\nan (optional) qualifier indicating the policy for a match, and optional\nparameters specific to the mechanism.",
+			"Fields": [
+				{
+					"Name": "Qualifier",
+					"Docs": "Sets the result if this directive matches. \"\" and \"+\" are \"pass\", \"-\" is \"fail\", \"?\" is \"neutral\", \"~\" is \"softfail\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Mechanism",
+					"Docs": "\"all\", \"include\", \"a\", \"mx\", \"ptr\", \"ip4\", \"ip6\", \"exists\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "DomainSpec",
+					"Docs": "For include, a, mx, ptr, exists. Always in lower-case when parsed using ParseRecord.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "IPstr",
+					"Docs": "Original string for IP, always with /subnet.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "IP4CIDRLen",
+					"Docs": "For a, mx, ip4.",
+					"Typewords": [
+						"nullable",
+						"int32"
+					]
+				},
+				{
+					"Name": "IP6CIDRLen",
+					"Docs": "For a, mx, ip6.",
+					"Typewords": [
+						"nullable",
+						"int32"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Modifier",
+			"Docs": "Modifier provides additional information for a policy.\n\"redirect\" and \"exp\" are not represented as a Modifier but explicitly in a Record.",
+			"Fields": [
+				{
+					"Name": "Key",
+					"Docs": "Key is case-insensitive.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Value",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainDMARC",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Status",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "Record",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"DMARCRecord"
+					]
+				},
+				{
+					"Name": "TXT",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Authentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DMARCRecord",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "\"v=DMARC1\", fixed.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Policy",
+					"Docs": "Required, for \"p=\".",
+					"Typewords": [
+						"DMARCPolicy"
+					]
+				},
+				{
+					"Name": "SubdomainPolicy",
+					"Docs": "Like policy but for subdomains. Optional, for \"sp=\".",
+					"Typewords": [
+						"DMARCPolicy"
+					]
+				},
+				{
+					"Name": "AggregateReportAddresses",
+					"Docs": "Optional, for \"rua=\". Destination addresses for aggregate reports.",
+					"Typewords": [
+						"[]",
+						"URI"
+					]
+				},
+				{
+					"Name": "FailureReportAddresses",
+					"Docs": "Optional, for \"ruf=\". Destination addresses for failure reports.",
+					"Typewords": [
+						"[]",
+						"URI"
+					]
+				},
+				{
+					"Name": "ADKIM",
+					"Docs": "Alignment: \"r\" (default) for relaxed or \"s\" for simple. For \"adkim=\".",
+					"Typewords": [
+						"Align"
+					]
+				},
+				{
+					"Name": "ASPF",
+					"Docs": "Alignment: \"r\" (default) for relaxed or \"s\" for simple. For \"aspf=\".",
+					"Typewords": [
+						"Align"
+					]
+				},
+				{
+					"Name": "AggregateReportingInterval",
+					"Docs": "In seconds, default 86400. For \"ri=\"",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "FailureReportingOptions",
+					"Docs": "\"0\" (default), \"1\", \"d\", \"s\". For \"fo=\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "ReportingFormat",
+					"Docs": "\"afrf\" (default). For \"rf=\".",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "Percentage",
+					"Docs": "Between 0 and 100, default 100. For \"pct=\". Policy applies randomly to this percentage of messages.",
+					"Typewords": [
+						"int32"
+					]
+				}
+			]
+		},
+		{
+			"Name": "URI",
+			"Docs": "URI is a destination address for reporting.",
+			"Fields": [
+				{
+					"Name": "Address",
+					"Docs": "Should start with \"mailto:\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "MaxSize",
+					"Docs": "Optional maximum message size, subject to Unit.",
+					"Typewords": [
+						"uint64"
+					]
+				},
+				{
+					"Name": "Unit",
+					"Docs": "\"\" (b), \"k\", \"m\", \"g\", \"t\" (case insensitive), unit size, where k is 2^10 etc.",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainTLSRPT",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Record",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"TLSRPTRecord"
+					]
+				},
+				{
+					"Name": "TXT",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSRPTRecord",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "\"TLSRPTv1\", for \"v=\".",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "RUAs",
+					"Docs": "Aggregate reporting URI, for \"rua=\". \"rua=\" can occur multiple times, each can be a list.",
+					"Typewords": [
+						"[]",
+						"[]",
+						"RUA"
+					]
+				},
+				{
+					"Name": "Extensions",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"Extension"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Extension",
+			"Docs": "Extension is an additional key/value pair for a TLSRPT record.",
+			"Fields": [
+				{
+					"Name": "Key",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Value",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainMTASTS",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Implemented",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Record",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"MTASTSRecord"
+					]
+				},
+				{
+					"Name": "Policy",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"Policy"
+					]
+				},
+				{
+					"Name": "PolicyText",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "MTASTSRecord",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "\"STSv1\", for \"v=\". Required.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ID",
+					"Docs": "Record version, for \"id=\". Required.",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Extensions",
+					"Docs": "Optional extensions.",
+					"Typewords": [
+						"[]",
+						"Pair"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Pair",
+			"Docs": "Pair is an extension key/value pair in a MTA-STS DNS record or policy.",
+			"Fields": [
+				{
+					"Name": "Key",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Value",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Policy",
+			"Docs": "Policy is an MTA-STS policy as served at \"https://mta-sts.\u003cdomain\u003e/.well-known/mta-sts.txt\".",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "\"STSv1\"",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Mode",
+					"Docs": "",
+					"Typewords": [
+						"Mode"
+					]
+				},
+				{
+					"Name": "MX",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"STSMX"
+					]
+				},
+				{
+					"Name": "MaxAgeSeconds",
+					"Docs": "How long this policy can be cached. Suggested values are in weeks or more.",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Extensions",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"Pair"
+					]
+				}
+			]
+		},
+		{
+			"Name": "STSMX",
+			"Docs": "STSMX is an allowlisted MX host name/pattern.\ntodo: find a way to name this just STSMX without getting duplicate names for \"MX\" in the sherpa api.",
+			"Fields": [
+				{
+					"Name": "Wildcard",
+					"Docs": "\"*.\" wildcard, e.g. if a subdomain matches. A wildcard must match exactly one label. *.example.com matches mail.example.com, but not example.com, and not foor.bar.example.com.",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainMX",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Have",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "OrigNextHopAuthentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "ExpandedNextHopAuthentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "ExpandedNextHop",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "Permanent",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainMXHost",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Host",
+					"Docs": "",
+					"Typewords": [
+						"IPDomain"
+					]
+				},
+				{
+					"Name": "MTASTSError",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "IP",
+					"Docs": "",
+					"Typewords": [
+						"DomainIP"
+					]
+				},
+				{
+					"Name": "DANE",
+					"Docs": "",
+					"Typewords": [
+						"DomainDANE"
+					]
+				},
+				{
+					"Name": "Dial",
+					"Docs": "",
+					"Typewords": [
+						"DomainDial"
+					]
+				},
+				{
+					"Name": "SMTP",
+					"Docs": "",
+					"Typewords": [
+						"DomainSMTP"
+					]
+				}
+			]
+		},
+		{
+			"Name": "IPDomain",
+			"Docs": "IPDomain is an ip address, a domain, or empty.",
+			"Fields": [
+				{
+					"Name": "IP",
+					"Docs": "",
+					"Typewords": [
+						"IP"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainIP",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Authentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "ExpandedAuthentic",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "ExpandedHost",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "IPs",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"IP"
+					]
+				},
+				{
+					"Name": "DualStack",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainDANE",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Required",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Records",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"TLSARecord"
+					]
+				},
+				{
+					"Name": "TLSABaseDomain",
+					"Docs": "",
+					"Typewords": [
+						"Domain"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "VerifiedRecord",
+					"Docs": "",
+					"Typewords": [
+						"TLSARecord"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSARecord",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Usage",
+					"Docs": "Which validations must be performed.",
+					"Typewords": [
+						"TLSAUsage"
+					]
+				},
+				{
+					"Name": "Selector",
+					"Docs": "What needs to be validated (full certificate or only public key).",
+					"Typewords": [
+						"TLSASelector"
+					]
+				},
+				{
+					"Name": "MatchType",
+					"Docs": "In which form the certificate/public key is stored in CertAssoc.",
+					"Typewords": [
+						"TLSAMatchType"
+					]
+				},
+				{
+					"Name": "CertAssoc",
+					"Docs": "Certificate association data.",
+					"Typewords": [
+						"[]",
+						"uint8"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainDial",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "IP",
+					"Docs": "",
+					"Typewords": [
+						"IP"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "DomainSMTP",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "DurationMS",
+					"Docs": "",
+					"Typewords": [
+						"int32"
+					]
+				},
+				{
+					"Name": "Error",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "Supports8bitMIME",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "SupportsRequireTLS",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "SupportsSMTPUTF8",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "SupportsSTARTTLS",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "TLSConnectionState",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"TLSConnectionState"
+					]
+				},
+				{
+					"Name": "RecipientDomainResult",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"TLSRPTResult"
+					]
+				},
+				{
+					"Name": "HostResult",
+					"Docs": "",
+					"Typewords": [
+						"nullable",
+						"TLSRPTResult"
+					]
+				},
+				{
+					"Name": "Trace",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"Proto"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSConnectionState",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Version",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "CipherSuite",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "NegotiatedProtocol",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ServerName",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSRPTResult",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Policy",
+					"Docs": "",
+					"Typewords": [
+						"TLSRPTResultPolicy"
+					]
+				},
+				{
+					"Name": "Summary",
+					"Docs": "",
+					"Typewords": [
+						"TLSRPTSummary"
+					]
+				},
+				{
+					"Name": "FailureDetails",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"TLSRPTFailureDetails"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSRPTResultPolicy",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "Type",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "String",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				},
+				{
+					"Name": "Domain",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "MXHost",
+					"Docs": "",
+					"Typewords": [
+						"[]",
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSRPTSummary",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "TotalSuccessfulSessionCount",
+					"Docs": "",
+					"Typewords": [
+						"int64"
+					]
+				},
+				{
+					"Name": "TotalFailureSessionCount",
+					"Docs": "",
+					"Typewords": [
+						"int64"
+					]
+				}
+			]
+		},
+		{
+			"Name": "TLSRPTFailureDetails",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "ResultType",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "SendingMTAIP",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ReceivingMXHostname",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ReceivingMXHelo",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "ReceivingIP",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "FailedSessionCount",
+					"Docs": "",
+					"Typewords": [
+						"int64"
+					]
+				},
+				{
+					"Name": "AdditionalInformation",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				},
+				{
+					"Name": "FailureReasonCode",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		},
+		{
+			"Name": "Proto",
+			"Docs": "",
+			"Fields": [
+				{
+					"Name": "ClientWrite",
+					"Docs": "",
+					"Typewords": [
+						"bool"
+					]
+				},
+				{
+					"Name": "Text",
+					"Docs": "",
+					"Typewords": [
+						"string"
+					]
+				}
+			]
+		}
+	],
+	"Ints": [
+		{
+			"Name": "TLSAUsage",
+			"Docs": "TLSAUsage indicates which certificate/public key verification must be done.",
+			"Values": [
+				{
+					"Name": "TLSAUsagePKIXTA",
+					"Value": 0,
+					"Docs": "PKIX/WebPKI, certificate must be valid (name, expiry, signed by CA, etc) and\nsigned by the trusted-anchor (TA) in this record."
+				},
+				{
+					"Name": "TLSAUsagePKIXEE",
+					"Value": 1,
+					"Docs": "PKIX/WebPKI, certificate must be valid (name, expiry, signed by CA, etc) and\nmatch the certificate in the record."
+				},
+				{
+					"Name": "TLSAUsageDANETA",
+					"Value": 2,
+					"Docs": "Certificate must be signed by trusted-anchor referenced in record, with matching\nname, non-expired, etc."
+				},
+				{
+					"Name": "TLSAUsageDANEEE",
+					"Value": 3,
+					"Docs": "Certificate must match the record. No further requirements on name, expiration\nor who signed it."
+				}
+			]
+		},
+		{
+			"Name": "TLSASelector",
+			"Docs": "TLSASelecter indicates the data the \"certificate association\" field is based on.",
+			"Values": [
+				{
+					"Name": "TLSASelectorCert",
+					"Value": 0,
+					"Docs": "DER-encoded x509 certificate."
+				},
+				{
+					"Name": "TLSASelectorSPKI",
+					"Value": 1,
+					"Docs": "DER-encoded subject public key info (SPKI), so only the public key and its type."
+				}
+			]
+		},
+		{
+			"Name": "TLSAMatchType",
+			"Docs": "TLSAMatchType indicates in which form the data as indicated by the selector\nis stored in the record as certificate association.",
+			"Values": [
+				{
+					"Name": "TLSAMatchTypeFull",
+					"Value": 0,
+					"Docs": "Full data, e.g. a full DER-encoded SPKI or even certificate."
+				},
+				{
+					"Name": "TLSAMatchTypeSHA256",
+					"Value": 1,
+					"Docs": "SHA2-256-hashed data, either SPKI or certificate."
+				},
+				{
+					"Name": "TLSAMatchTypeSHA512",
+					"Value": 2,
+					"Docs": "SHA2-512-hashed data."
+				}
+			]
+		}
+	],
+	"Strings": [
+		{
+			"Name": "DKIMStatus",
+			"Docs": "",
+			"Values": null
+		},
+		{
+			"Name": "Localpart",
+			"Docs": "Localpart is a decoded local part of an email address, before the \"@\".\nFor quoted strings, values do not hold the double quote or escaping backslashes.\nAn empty string can be a valid localpart.",
+			"Values": null
+		},
+		{
+			"Name": "DMARCPolicy",
+			"Docs": "Policy as used in DMARC DNS record for \"p=\" or \"sp=\".",
+			"Values": [
+				{
+					"Name": "PolicyEmpty",
+					"Value": "",
+					"Docs": "Only for the optional Record.SubdomainPolicy."
+				},
+				{
+					"Name": "PolicyNone",
+					"Value": "none",
+					"Docs": ""
+				},
+				{
+					"Name": "PolicyQuarantine",
+					"Value": "quarantine",
+					"Docs": ""
+				},
+				{
+					"Name": "PolicyReject",
+					"Value": "reject",
+					"Docs": ""
+				}
+			]
+		},
+		{
+			"Name": "Align",
+			"Docs": "Align specifies the required alignment of a domain name.",
+			"Values": [
+				{
+					"Name": "AlignStrict",
+					"Value": "s",
+					"Docs": "Strict requires an exact domain name match."
+				},
+				{
+					"Name": "AlignRelaxed",
+					"Value": "r",
+					"Docs": "Relaxed requires either an exact or subdomain name match."
+				}
+			]
+		},
+		{
+			"Name": "RUA",
+			"Docs": "RUA is a reporting address with scheme and special characters \",\", \"!\" and\n\";\" not encoded.",
+			"Values": null
+		},
+		{
+			"Name": "Mode",
+			"Docs": "Mode indicates how the policy should be interpreted.",
+			"Values": [
+				{
+					"Name": "ModeEnforce",
+					"Value": "enforce",
+					"Docs": "Policy must be followed, i.e. deliveries must fail if a TLS connection cannot be made."
+				},
+				{
+					"Name": "ModeTesting",
+					"Value": "testing",
+					"Docs": "In case TLS cannot be negotiated, plain SMTP can be used, but failures must be reported, e.g. with TLSRPT."
+				},
+				{
+					"Name": "ModeNone",
+					"Value": "none",
+					"Docs": "In case MTA-STS is not or no longer implemented."
+				}
+			]
+		},
+		{
+			"Name": "IP",
+			"Docs": "An IP is a single IP address, a slice of bytes.\nFunctions in this package accept either 4-byte (IPv4)\nor 16-byte (IPv6) slices as input.\n\nNote that in this documentation, referring to an\nIP address as an IPv4 address or an IPv6 address\nis a semantic property of the address, not just the\nlength of the byte slice: a 16-byte slice can still\nbe an IPv4 address.",
+			"Values": []
+		}
+	],
+	"SherpaVersion": 0,
+	"SherpadocVersion": 1
+}

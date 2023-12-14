@@ -1,0 +1,31 @@
+name: Build and test
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['stable', 'oldstable']
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+      - run: make build
+
+      # Rebuild webmail frontend code, should be the same as committed.
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
+      - run: npm ci
+      - run: make frontend
+
+      # Format code, we check below if nothing changed.
+      - run: make fmt
+
+      # Enforce the steps above didn't make any changes.
+      - run: git diff --exit-code
