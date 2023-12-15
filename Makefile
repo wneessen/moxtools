@@ -1,5 +1,5 @@
 default: build
-	./moxtools -ratelimit
+	./moxtools
 
 build:
 	# build early to catch syntax errors
@@ -12,7 +12,6 @@ build:
 
 check:
 	staticcheck ./...
-	#staticcheck -tags integration
 	GOARCH=386 CGO_ENABLED=0 go vet ./...
 
 # having "err" shadowed is common, best to not have others

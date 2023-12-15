@@ -305,6 +305,9 @@ type ctxKey string
 var keyIP ctxKey = "ip"
 
 func xlimit(ctx context.Context, r *ratelimit.Limiter) {
+	if !ratelimiter {
+		return
+	}
 	ip := ctx.Value(keyIP).(net.IP)
 	if ip == nil || !r.Add(ip, time.Now(), 1) {
 		xcheckuser(errors.New("too many requests from ip or subnet in window, try again soon"), "rate limiter", slog.Any("ip", ip))
@@ -877,7 +880,7 @@ func (d *limitDialer) DialContext(ctx context.Context, network, addr string) (c 
 	if ip == nil {
 		return nil, fmt.Errorf("address not an ip: %q", host)
 	}
-	if !smtpDialLimiter.Add(ip, time.Now(), 1) {
+	if ratelimiter && !smtpDialLimiter.Add(ip, time.Now(), 1) {
 		return nil, fmt.Errorf("rate limited: reached max number of smtp connections to ip in window, try again soon")
 	}
 	nd := &net.Dialer{}
