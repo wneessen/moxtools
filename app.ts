@@ -416,7 +416,7 @@ const init = async () => {
 		dom.div(
 			dom.div(style({float: 'right', color: '#888'}), dom.div(meta?.Version, ' ', meta?.GoVersion, ' ', meta?.GoOs, '/', meta?.GoArch)),
 			dom.h1('moxtools'),
-			dom.div('Moxtools provides a few email-related tools, mostly as a showcase for the ', dom.a(attr.href('https://pkg.go.dev/github.com/mjl-/mox'), 'Go packages'), ' of ', dom.a(attr.href('https://github.com/mjl-/mox'), 'mox'), '.'),
+			dom.div('Moxtools provides a few email-related tools, mostly as a showcase for the ', dom.a(attr.href('https://pkg.go.dev/github.com/mjl-/mox#section-directories'), 'Go packages'), ' of ', dom.a(attr.href('https://github.com/mjl-/mox'), 'mox'), '.'),
 			dom.div('The public instance at ', dom.a(attr.href('https://tools.xmox.nl'), 'tools.xmox.nl'), ' has rate limiting enabled to prevent abuse, you can easily ', dom.a(attr.href('https://github.com/mjl-/moxtools'), 'run your own moxtools instance'), ' without limits.'),
 		),
 		dom.br(),

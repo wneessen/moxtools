@@ -1,6 +1,6 @@
 Moxtools is a web app for inspecting mail infrastructure, serving as a showcase
 for reusing some of the Go packages of https://github.com/mjl-/mox, an email
-server.
+server. See https://pkg.go.dev/github.com/mjl-/mox#section-directories.
 
 Moxtools runs at https://tools.xmox.nl, but you can easily run it locally
 without the rate limiting.

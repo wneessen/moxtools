@@ -494,14 +494,28 @@ export const parser = {
 let defaultOptions: ClientOptions = {slicesNullable: true, mapsNullable: true, nullableOptional: true}
 
 export class Client {
-	constructor(private baseURL=defaultBaseURL, public options?: ClientOptions) {
-		if (!options) {
-			this.options = defaultOptions
-		}
+	private baseURL: string
+	public authState: AuthState
+	public options: ClientOptions
+
+	constructor() {
+		this.authState = {}
+		this.options = {...defaultOptions}
+		this.baseURL = this.options.baseURL || defaultBaseURL
+	}
+
+	withAuthToken(token: string): Client {
+		const c = new Client()
+		c.authState.token = token
+		c.options = this.options
+		return c
 	}
 
 	withOptions(options: ClientOptions): Client {
-		return new Client(this.baseURL, { ...this.options, ...options })
+		const c = new Client()
+		c.authState = this.authState
+		c.options = { ...this.options, ...options }
+		return c
 	}
 
 	async SPFCheck(domain: string, ipstr: string): Promise<[SPFReceived, Domain, string, boolean]> {
@@ -509,7 +523,7 @@ export class Client {
 		const paramTypes: string[][] = [["string"],["string"]]
 		const returnTypes: string[][] = [["SPFReceived"],["Domain"],["string"],["bool"]]
 		const params: any[] = [domain, ipstr]
-		return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params) as [SPFReceived, Domain, string, boolean]
+		return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params) as [SPFReceived, Domain, string, boolean]
 	}
 
 	async DKIMLookup(selector: string, domain: string): Promise<[DKIMStatus, Record | null, string, boolean]> {
@@ -517,7 +531,7 @@ export class Client {
 		const paramTypes: string[][] = [["string"],["string"]]
 		const returnTypes: string[][] = [["DKIMStatus"],["nullable","Record"],["string"],["bool"]]
 		const params: any[] = [selector, domain]
-		return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params) as [DKIMStatus, Record | null, string, boolean]
+		return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params) as [DKIMStatus, Record | null, string, boolean]
 	}
 
 	async DKIMVerify(message: string): Promise<DKIMResult[] | null> {
@@ -525,7 +539,7 @@ export class Client {
 		const paramTypes: string[][] = [["string"]]
 		const returnTypes: string[][] = [["[]","DKIMResult"]]
 		const params: any[] = [message]
-		return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params) as DKIMResult[] | null
+		return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params) as DKIMResult[] | null
 	}
 
 	async DomainCheck(domain: string): Promise<DomainResult> {
@@ -533,7 +547,7 @@ export class Client {
 		const paramTypes: string[][] = [["string"]]
 		const returnTypes: string[][] = [["DomainResult"]]
 		const params: any[] = [domain]
-		return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params) as DomainResult
+		return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params) as DomainResult
 	}
 }
 
@@ -645,7 +659,7 @@ class verifier {
 
 		const ensure = (ok: boolean, expect: string): any => {
 			if (!ok) {
-				error('got ' + JSON.stringify(v) +  ', expected ' + expect)
+				error('got ' + JSON.stringify(v) + ', expected ' + expect)
 			}
 			return v
 		}
@@ -786,6 +800,7 @@ class verifier {
 
 
 export interface ClientOptions {
+	baseURL?: string
 	aborter?: {abort?: () => void}
 	timeoutMsec?: number
 	skipParamCheck?: boolean
@@ -793,9 +808,16 @@ export interface ClientOptions {
 	slicesNullable?: boolean
 	mapsNullable?: boolean
 	nullableOptional?: boolean
+	csrfHeader?: string
+	login?: (reason: string) => Promise<string>
 }
 
-const _sherpaCall = async (baseURL: string, options: ClientOptions, paramTypes: string[][], returnTypes: string[][], name: string, params: any[]): Promise<any> => {
+export interface AuthState {
+	token?: string // For csrf request header.
+	loginPromise?: Promise<void> // To let multiple API calls wait for a single login attempt, not each opening a login popup.
+}
+
+const _sherpaCall = async (baseURL: string, authState: AuthState, options: ClientOptions, paramTypes: string[][], returnTypes: string[][], name: string, params: any[]): Promise<any> => {
 	if (!options.skipParamCheck) {
 		if (params.length !== paramTypes.length) {
 			return Promise.reject({ message: 'wrong number of parameters in sherpa call, saw ' + params.length + ' != expected ' + paramTypes.length })
@@ -836,14 +858,36 @@ const _sherpaCall = async (baseURL: string, options: ClientOptions, paramTypes: 
 		await simulate(json)
 	}
 
-	// Immediately create promise, so options.aborter is changed before returning.
-	const promise = new Promise((resolve, reject) => {
-		let resolve1 = (v: { code: string, message: string }) => {
+	const fn = (resolve: (v: any) => void, reject: (v: any) => void) => {
+		let resolve1 = (v: any) => {
 			resolve(v)
 			resolve1 = () => { }
 			reject1 = () => { }
 		}
 		let reject1 = (v: { code: string, message: string }) => {
+			if ((v.code === 'user:noAuth' || v.code === 'user:badAuth')  && options.login) {
+				const login = options.login
+				if (!authState.loginPromise) {
+					authState.loginPromise = new Promise((aresolve, areject) => {
+						login(v.code === 'user:badAuth' ? (v.message || '') : '')
+						.then((token) => {
+							authState.token = token
+							authState.loginPromise = undefined
+							aresolve()
+						}, (err: any) => {
+							authState.loginPromise = undefined
+							areject(err)
+						})
+					})
+				}
+				authState.loginPromise
+				.then(() => {
+					fn(resolve, reject)
+				}, (err: any) => {
+					reject(err)
+				})
+				return
+			}
 			reject(v)
 			resolve1 = () => { }
 			reject1 = () => { }
@@ -858,6 +902,9 @@ const _sherpaCall = async (baseURL: string, options: ClientOptions, paramTypes: 
 			}
 		}
 		req.open('POST', url, true)
+		if (options.csrfHeader && authState.token) {
+			req.setRequestHeader(options.csrfHeader, authState.token)
+		}
 		if (options.timeoutMsec) {
 			req.timeout = options.timeoutMsec
 		}
@@ -926,8 +973,8 @@ const _sherpaCall = async (baseURL: string, options: ClientOptions, paramTypes: 
 		} catch (err) {
 			reject1({ code: 'sherpa:badData', message: 'cannot marshal to JSON' })
 		}
-	})
-	return await promise
+	}
+	return await new Promise(fn)
 }
 
 }

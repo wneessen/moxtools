@@ -372,43 +372,50 @@ var api;
 	};
 	let defaultOptions = { slicesNullable: true, mapsNullable: true, nullableOptional: true };
 	class Client {
-		constructor(baseURL = api.defaultBaseURL, options) {
-			this.baseURL = baseURL;
-			this.options = options;
-			if (!options) {
-				this.options = defaultOptions;
-			}
+		constructor() {
+			this.authState = {};
+			this.options = { ...defaultOptions };
+			this.baseURL = this.options.baseURL || api.defaultBaseURL;
+		}
+		withAuthToken(token) {
+			const c = new Client();
+			c.authState.token = token;
+			c.options = this.options;
+			return c;
 		}
 		withOptions(options) {
-			return new Client(this.baseURL, { ...this.options, ...options });
+			const c = new Client();
+			c.authState = this.authState;
+			c.options = { ...this.options, ...options };
+			return c;
 		}
 		async SPFCheck(domain, ipstr) {
 			const fn = "SPFCheck";
 			const paramTypes = [["string"], ["string"]];
 			const returnTypes = [["SPFReceived"], ["Domain"], ["string"], ["bool"]];
 			const params = [domain, ipstr];
-			return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params);
+			return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params);
 		}
 		async DKIMLookup(selector, domain) {
 			const fn = "DKIMLookup";
 			const paramTypes = [["string"], ["string"]];
 			const returnTypes = [["DKIMStatus"], ["nullable", "Record"], ["string"], ["bool"]];
 			const params = [selector, domain];
-			return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params);
+			return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params);
 		}
 		async DKIMVerify(message) {
 			const fn = "DKIMVerify";
 			const paramTypes = [["string"]];
 			const returnTypes = [["[]", "DKIMResult"]];
 			const params = [message];
-			return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params);
+			return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params);
 		}
 		async DomainCheck(domain) {
 			const fn = "DomainCheck";
 			const paramTypes = [["string"]];
 			const returnTypes = [["DomainResult"]];
 			const params = [domain];
-			return await _sherpaCall(this.baseURL, { ...this.options }, paramTypes, returnTypes, fn, params);
+			return await _sherpaCall(this.baseURL, this.authState, { ...this.options }, paramTypes, returnTypes, fn, params);
 		}
 	}
 	api.Client = Client;
@@ -592,7 +599,7 @@ var api;
 			}
 		}
 	}
-	const _sherpaCall = async (baseURL, options, paramTypes, returnTypes, name, params) => {
+	const _sherpaCall = async (baseURL, authState, options, paramTypes, returnTypes, name, params) => {
 		if (!options.skipParamCheck) {
 			if (params.length !== paramTypes.length) {
 				return Promise.reject({ message: 'wrong number of parameters in sherpa call, saw ' + params.length + ' != expected ' + paramTypes.length });
@@ -634,14 +641,36 @@ var api;
 		if (json) {
 			await simulate(json);
 		}
-		// Immediately create promise, so options.aborter is changed before returning.
-		const promise = new Promise((resolve, reject) => {
+		const fn = (resolve, reject) => {
 			let resolve1 = (v) => {
 				resolve(v);
 				resolve1 = () => { };
 				reject1 = () => { };
 			};
 			let reject1 = (v) => {
+				if ((v.code === 'user:noAuth' || v.code === 'user:badAuth') && options.login) {
+					const login = options.login;
+					if (!authState.loginPromise) {
+						authState.loginPromise = new Promise((aresolve, areject) => {
+							login(v.code === 'user:badAuth' ? (v.message || '') : '')
+								.then((token) => {
+								authState.token = token;
+								authState.loginPromise = undefined;
+								aresolve();
+							}, (err) => {
+								authState.loginPromise = undefined;
+								areject(err);
+							});
+						});
+					}
+					authState.loginPromise
+						.then(() => {
+						fn(resolve, reject);
+					}, (err) => {
+						reject(err);
+					});
+					return;
+				}
 				reject(v);
 				resolve1 = () => { };
 				reject1 = () => { };
@@ -655,6 +684,9 @@ var api;
 				};
 			}
 			req.open('POST', url, true);
+			if (options.csrfHeader && authState.token) {
+				req.setRequestHeader(options.csrfHeader, authState.token);
+			}
 			if (options.timeoutMsec) {
 				req.timeout = options.timeoutMsec;
 			}
@@ -728,8 +760,8 @@ var api;
 			catch (err) {
 				reject1({ code: 'sherpa:badData', message: 'cannot marshal to JSON' });
 			}
-		});
-		return await promise;
+		};
+		return await new Promise(fn);
 	};
 })(api || (api = {}));
 // All logging goes through log() instead of console.log, except "should not happen" logging.
@@ -929,7 +961,7 @@ const init = async () => {
 	let domainFieldset;
 	let domainName;
 	let result;
-	dom._kids(document.body, dom.div(dom.div(style({ float: 'right', color: '#888' }), dom.div(meta?.Version, ' ', meta?.GoVersion, ' ', meta?.GoOs, '/', meta?.GoArch)), dom.h1('moxtools'), dom.div('Moxtools provides a few email-related tools, mostly as a showcase for the ', dom.a(attr.href('https://pkg.go.dev/github.com/mjl-/mox'), 'Go packages'), ' of ', dom.a(attr.href('https://github.com/mjl-/mox'), 'mox'), '.'), dom.div('The public instance at ', dom.a(attr.href('https://tools.xmox.nl'), 'tools.xmox.nl'), ' has rate limiting enabled to prevent abuse, you can easily ', dom.a(attr.href('https://github.com/mjl-/moxtools'), 'run your own moxtools instance'), ' without limits.')), dom.br(), dom.div(dom._class('row'), dom.div(dom._class('inputs'), style({ width: '20em' }), dom.h2('Domain check'), domainForm = dom.form(async function submit(e) {
+	dom._kids(document.body, dom.div(dom.div(style({ float: 'right', color: '#888' }), dom.div(meta?.Version, ' ', meta?.GoVersion, ' ', meta?.GoOs, '/', meta?.GoArch)), dom.h1('moxtools'), dom.div('Moxtools provides a few email-related tools, mostly as a showcase for the ', dom.a(attr.href('https://pkg.go.dev/github.com/mjl-/mox#section-directories'), 'Go packages'), ' of ', dom.a(attr.href('https://github.com/mjl-/mox'), 'mox'), '.'), dom.div('The public instance at ', dom.a(attr.href('https://tools.xmox.nl'), 'tools.xmox.nl'), ' has rate limiting enabled to prevent abuse, you can easily ', dom.a(attr.href('https://github.com/mjl-/moxtools'), 'run your own moxtools instance'), ' without limits.')), dom.br(), dom.div(dom._class('row'), dom.div(dom._class('inputs'), style({ width: '20em' }), dom.h2('Domain check'), domainForm = dom.form(async function submit(e) {
 		e.preventDefault();
 		e.stopPropagation();
 		window.location.hash = ['#domain', encodeURIComponent(domainName.value)].join('/');
