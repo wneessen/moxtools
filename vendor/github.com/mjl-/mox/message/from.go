@@ -3,9 +3,8 @@ package message
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/textproto"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/mjl-/mox/dns"
 	"github.com/mjl-/mox/mlog"
@@ -43,6 +42,10 @@ func From(elog *slog.Logger, strict bool, r io.ReaderAt) (raddr smtp.Address, en
 	if err != nil {
 		return raddr, nil, nil, fmt.Errorf("bad domain in from address: %v", err)
 	}
-	addr := smtp.Address{Localpart: smtp.Localpart(from[0].User), Domain: d}
+	lp, err := smtp.ParseLocalpart(from[0].User)
+	if err != nil {
+		return raddr, nil, nil, fmt.Errorf("parsing localpart in from address: %v", err)
+	}
+	addr := smtp.Address{Localpart: lp, Domain: d}
 	return addr, p.Envelope, textproto.MIMEHeader(header), nil
 }

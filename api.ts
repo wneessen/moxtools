@@ -13,7 +13,7 @@ export interface SPFReceived {
 // trailing dot. When using with StrictResolver, add the trailing dot.
 export interface Domain {
 	ASCII: string  // A non-unicode domain, e.g. with A-labels (xn--...) or NR-LDH (non-reserved letters/digits/hyphens) labels. Always in lower case. No trailing dot.
-	Unicode: string  // Name as U-labels. Empty if this is an ASCII-only domain. No trailing dot.
+	Unicode: string  // Name as U-labels, in Unicode NFC. Empty if this is an ASCII-only domain. No trailing dot.
 }
 
 // Record is a DKIM DNS record, served on <selector>._domainkey.<domain> for a
@@ -352,6 +352,7 @@ export type DKIMStatus = string
 // Localpart is a decoded local part of an email address, before the "@".
 // For quoted strings, values do not hold the double quote or escaping backslashes.
 // An empty string can be a valid localpart.
+// Localparts are in Unicode NFC.
 export type Localpart = string
 
 // Policy as used in DMARC DNS record for "p=" or "sp=".
@@ -777,7 +778,7 @@ class verifier {
 					return v
 				}
 			}
-			error('unknkown value ' + v + ' for named strings ' + t.Name)
+			error('unknown value ' + v + ' for named strings ' + t.Name)
 		} else if (intsTypes[nt.Name]) {
 			const t = nt as Ints
 			if (typeof v !== 'number' || !Number.isInteger(v)) {
@@ -791,7 +792,7 @@ class verifier {
 					return v
 				}
 			}
-			error('unknkown value ' + v + ' for named ints ' + t.Name)
+			error('unknown value ' + v + ' for named ints ' + t.Name)
 		} else {
 			throw new Error('unexpected named type ' + nt)
 		}

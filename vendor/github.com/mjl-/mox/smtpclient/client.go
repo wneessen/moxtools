@@ -28,6 +28,7 @@ package smtpclient
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -35,13 +36,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/mjl-/adns"
 
@@ -133,16 +133,20 @@ type Client struct {
 	botched  bool // If set, protocol is out of sync and no further commands can be sent.
 	needRset bool // If set, a new delivery requires an RSET command.
 
-	remoteHelo        string // From 220 greeting line.
-	extEcodes         bool   // Remote server supports sending extended error codes.
-	extStartTLS       bool   // Remote server supports STARTTLS.
-	ext8bitmime       bool
-	extSize           bool     // Remote server supports SIZE parameter.
-	maxSize           int64    // Max size of email message.
-	extPipelining     bool     // Remote server supports command pipelining.
-	extSMTPUTF8       bool     // Remote server supports SMTPUTF8 extension.
-	extAuthMechanisms []string // Supported authentication mechanisms.
-	extRequireTLS     bool     // Remote supports REQUIRETLS extension.
+	remoteHelo            string // From 220 greeting line.
+	extEcodes             bool   // Remote server supports sending extended error codes.
+	extStartTLS           bool   // Remote server supports STARTTLS.
+	ext8bitmime           bool
+	extSize               bool              // Remote server supports SIZE parameter. Must only be used if > 0.
+	maxSize               int64             // Max size of email message.
+	extPipelining         bool              // Remote server supports command pipelining.
+	extSMTPUTF8           bool              // Remote server supports SMTPUTF8 extension.
+	extAuthMechanisms     []string          // Supported authentication mechanisms.
+	extRequireTLS         bool              // Remote supports REQUIRETLS extension.
+	ExtLimits             map[string]string // For LIMITS extension, only if present and valid, with uppercase keys.
+	ExtLimitMailMax       int               // Max "MAIL" commands in a connection, if > 0.
+	ExtLimitRcptMax       int               // Max "RCPT" commands in a transaction, if > 0.
+	ExtLimitRcptDomainMax int               // Max unique domains in a connection, if > 0.
 }
 
 // Error represents a failure to deliver a message.
@@ -162,11 +166,16 @@ type Error struct {
 	// SMTP command causing failure.
 	Command string
 	// For errors due to SMTP responses, the full SMTP line excluding CRLF that caused
-	// the error. Typically the last line read.
+	// the error. First line of a multi-line response.
 	Line string
+	// Optional additional lines in case of multi-line SMTP response.  Most SMTP
+	// responses are single-line, leaving this field empty.
+	MoreLines []string
 	// Underlying error, e.g. one of the Err variables in this package, or io errors.
 	Err error
 }
+
+type Response Error
 
 // Unwrap returns the underlying Err.
 func (e Error) Unwrap() error {
@@ -419,27 +428,27 @@ func (c *Client) tlsConfig() *tls.Config {
 
 // xbotchf generates a temporary error and marks the client as botched. e.g. for
 // i/o errors or invalid protocol messages.
-func (c *Client) xbotchf(code int, secode string, lastLine, format string, args ...any) {
-	panic(c.botchf(code, secode, lastLine, format, args...))
+func (c *Client) xbotchf(code int, secode string, firstLine string, moreLines []string, format string, args ...any) {
+	panic(c.botchf(code, secode, firstLine, moreLines, format, args...))
 }
 
 // botchf generates a temporary error and marks the client as botched. e.g. for
 // i/o errors or invalid protocol messages.
-func (c *Client) botchf(code int, secode string, lastLine, format string, args ...any) error {
+func (c *Client) botchf(code int, secode string, firstLine string, moreLines []string, format string, args ...any) error {
 	c.botched = true
-	return c.errorf(false, code, secode, lastLine, format, args...)
+	return c.errorf(false, code, secode, firstLine, moreLines, format, args...)
 }
 
-func (c *Client) errorf(permanent bool, code int, secode, lastLine, format string, args ...any) error {
+func (c *Client) errorf(permanent bool, code int, secode, firstLine string, moreLines []string, format string, args ...any) error {
 	var cmd string
 	if len(c.cmds) > 0 {
 		cmd = c.cmds[0]
 	}
-	return Error{permanent, code, secode, cmd, lastLine, fmt.Errorf(format, args...)}
+	return Error{permanent, code, secode, cmd, firstLine, moreLines, fmt.Errorf(format, args...)}
 }
 
-func (c *Client) xerrorf(permanent bool, code int, secode, lastLine, format string, args ...any) {
-	panic(c.errorf(permanent, code, secode, lastLine, format, args...))
+func (c *Client) xerrorf(permanent bool, code int, secode, firstLine string, moreLines []string, format string, args ...any) {
+	panic(c.errorf(permanent, code, secode, firstLine, moreLines, format, args...))
 }
 
 // timeoutWriter passes each Write on to conn after setting a write deadline on conn based on
@@ -478,7 +487,7 @@ func (c *Client) readline() (string, error) {
 			c.tlsResultAddFailureDetails(-1, 1, c.tlsrptFailureDetails(resultType, reasonCode))
 		}
 
-		return line, c.botchf(0, "", "", "%s: %w", strings.Join(c.cmds, ","), err)
+		return line, c.botchf(0, "", "", nil, "%s: %w", strings.Join(c.cmds, ","), err)
 	}
 	c.firstReadAfterHandshake = false
 	return line, nil
@@ -512,45 +521,55 @@ func (c *Client) xbwritelinef(format string, args ...any) {
 func (c *Client) xbwriteline(line string) {
 	_, err := fmt.Fprintf(c.w, "%s\r\n", line)
 	if err != nil {
-		c.xbotchf(0, "", "", "write: %w", err)
+		c.xbotchf(0, "", "", nil, "write: %w", err)
 	}
 }
 
 func (c *Client) xflush() {
 	err := c.w.Flush()
 	if err != nil {
-		c.xbotchf(0, "", "", "writes: %w", err)
+		c.xbotchf(0, "", "", nil, "writes: %w", err)
 	}
 }
 
 // read response, possibly multiline, with supporting extended codes based on configuration in client.
-func (c *Client) xread() (code int, secode, lastLine string, texts []string) {
+func (c *Client) xread() (code int, secode, firstLine string, moreLines []string) {
 	var err error
-	code, secode, lastLine, texts, err = c.read()
+	code, secode, firstLine, moreLines, err = c.read()
 	if err != nil {
 		panic(err)
 	}
 	return
 }
 
-func (c *Client) read() (code int, secode, lastLine string, texts []string, rerr error) {
-	return c.readecode(c.extEcodes)
+func (c *Client) read() (code int, secode, firstLine string, moreLines []string, rerr error) {
+	code, secode, _, firstLine, moreLines, _, rerr = c.readecode(c.extEcodes)
+	return
 }
 
 // read response, possibly multiline.
 // if ecodes, extended codes are parsed.
-func (c *Client) readecode(ecodes bool) (code int, secode, lastLine string, texts []string, rerr error) {
+func (c *Client) readecode(ecodes bool) (code int, secode, lastText, firstLine string, moreLines, moreTexts []string, rerr error) {
+	first := true
 	for {
 		co, sec, text, line, last, err := c.read1(ecodes)
+		if first {
+			firstLine = line
+			first = false
+		} else if line != "" {
+			moreLines = append(moreLines, line)
+			if text != "" {
+				moreTexts = append(moreTexts, text)
+			}
+		}
 		if err != nil {
 			rerr = err
 			return
 		}
-		texts = append(texts, text)
 		if code != 0 && co != code {
 			// ../rfc/5321:2771
-			err := c.botchf(0, "", line, "%w: multiline response with different codes, previous %d, last %d", ErrProtocol, code, co)
-			return 0, "", "", nil, err
+			err := c.botchf(0, "", firstLine, moreLines, "%w: multiline response with different codes, previous %d, last %d", ErrProtocol, code, co)
+			return 0, "", "", "", nil, nil, err
 		}
 		code = co
 		if last {
@@ -570,14 +589,14 @@ func (c *Client) readecode(ecodes bool) (code int, secode, lastLine string, text
 					slog.String("secode", sec),
 					slog.Duration("duration", time.Since(c.cmdStart)))
 			}
-			return co, sec, line, texts, nil
+			return co, sec, text, firstLine, moreLines, moreTexts, nil
 		}
 	}
 }
 
-func (c *Client) xreadecode(ecodes bool) (code int, secode, lastLine string, texts []string) {
+func (c *Client) xreadecode(ecodes bool) (code int, secode, lastText, firstLine string, moreLines, moreTexts []string) {
 	var err error
-	code, secode, lastLine, texts, err = c.readecode(ecodes)
+	code, secode, lastText, firstLine, moreLines, moreTexts, err = c.readecode(ecodes)
 	if err != nil {
 		panic(err)
 	}
@@ -595,12 +614,12 @@ func (c *Client) read1(ecodes bool) (code int, secode, text, line string, last b
 	for ; i < len(line) && line[i] >= '0' && line[i] <= '9'; i++ {
 	}
 	if i != 3 {
-		rerr = c.botchf(0, "", line, "%w: expected response code: %s", ErrProtocol, line)
+		rerr = c.botchf(0, "", line, nil, "%w: expected response code: %s", ErrProtocol, line)
 		return
 	}
 	v, err := strconv.ParseInt(line[:i], 10, 32)
 	if err != nil {
-		rerr = c.botchf(0, "", line, "%w: bad response code (%s): %s", ErrProtocol, err, line)
+		rerr = c.botchf(0, "", line, nil, "%w: bad response code (%s): %s", ErrProtocol, err, line)
 		return
 	}
 	code = int(v)
@@ -613,7 +632,7 @@ func (c *Client) read1(ecodes bool) (code int, secode, text, line string, last b
 		// Allow missing space. ../rfc/5321:2570 ../rfc/5321:2612
 		last = true
 	} else {
-		rerr = c.botchf(0, "", line, "%w: expected space or dash after response code: %s", ErrProtocol, line)
+		rerr = c.botchf(0, "", line, nil, "%w: expected space or dash after response code: %s", ErrProtocol, line)
 		return
 	}
 
@@ -685,28 +704,28 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 		c.cmdStart = time.Now()
 		// Syntax: ../rfc/5321:1827
 		c.xwritelinef("EHLO %s", ehloHostname.ASCII)
-		code, _, lastLine, remains := c.xreadecode(false)
+		code, _, _, firstLine, moreLines, moreTexts := c.xreadecode(false)
 		switch code {
 		// ../rfc/5321:997
 		// ../rfc/5321:3098
 		case smtp.C500BadSyntax, smtp.C501BadParamSyntax, smtp.C502CmdNotImpl, smtp.C503BadCmdSeq, smtp.C504ParamNotImpl:
 			if !heloOK {
-				c.xerrorf(true, code, "", lastLine, "%w: remote claims ehlo is not supported", ErrProtocol)
+				c.xerrorf(true, code, "", firstLine, moreLines, "%w: remote claims ehlo is not supported", ErrProtocol)
 			}
 			// ../rfc/5321:996
 			c.cmds[0] = "helo"
 			c.cmdStart = time.Now()
 			c.xwritelinef("HELO %s", ehloHostname.ASCII)
-			code, _, lastLine, _ = c.xreadecode(false)
+			code, _, _, firstLine, _, _ = c.xreadecode(false)
 			if code != smtp.C250Completed {
-				c.xerrorf(code/100 == 5, code, "", lastLine, "%w: expected 250 to HELO, got %d", ErrStatus, code)
+				c.xerrorf(code/100 == 5, code, "", firstLine, moreLines, "%w: expected 250 to HELO, got %d", ErrStatus, code)
 			}
 			return
 		case smtp.C250Completed:
 		default:
-			c.xerrorf(code/100 == 5, code, "", lastLine, "%w: expected 250, got %d", ErrStatus, code)
+			c.xerrorf(code/100 == 5, code, "", firstLine, moreLines, "%w: expected 250, got %d", ErrStatus, code)
 		}
-		for _, s := range remains[1:] {
+		for _, s := range moreTexts {
 			// ../rfc/5321:1869
 			s = strings.ToUpper(strings.TrimSpace(s))
 			switch s {
@@ -725,12 +744,15 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 				if s == "SMTPUTF8" || strings.HasPrefix(s, "SMTPUTF8 ") {
 					c.extSMTPUTF8 = true
 				} else if strings.HasPrefix(s, "SIZE ") {
+					// ../rfc/1870:77
 					c.extSize = true
 					if v, err := strconv.ParseInt(s[len("SIZE "):], 10, 64); err == nil {
 						c.maxSize = v
 					}
 				} else if strings.HasPrefix(s, "AUTH ") {
 					c.extAuthMechanisms = strings.Split(s[len("AUTH "):], " ")
+				} else if strings.HasPrefix(s, "LIMITS ") {
+					c.ExtLimits, c.ExtLimitMailMax, c.ExtLimitRcptMax, c.ExtLimitRcptDomainMax = parseLimits([]byte(s[len("LIMITS"):]))
 				}
 			}
 		}
@@ -739,12 +761,12 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 	// Read greeting.
 	c.cmds = []string{"(greeting)"}
 	c.cmdStart = time.Now()
-	code, _, lastLine, lines := c.xreadecode(false)
+	code, _, _, firstLine, moreLines, _ := c.xreadecode(false)
 	if code != smtp.C220ServiceReady {
-		c.xerrorf(code/100 == 5, code, "", lastLine, "%w: expected 220, got %d", ErrStatus, code)
+		c.xerrorf(code/100 == 5, code, "", firstLine, moreLines, "%w: expected 220, got %d", ErrStatus, code)
 	}
 	// ../rfc/5321:2588
-	c.remoteHelo, _, _ = strings.Cut(lines[0], " ")
+	_, c.remoteHelo, _ = strings.Cut(firstLine, " ")
 
 	// Write EHLO, falling back to HELO if server doesn't appear to support it.
 	hello(true)
@@ -755,11 +777,11 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 		c.cmds[0] = "starttls"
 		c.cmdStart = time.Now()
 		c.xwritelinef("STARTTLS")
-		code, secode, lastLine, _ := c.xread()
+		code, secode, firstLine, _ := c.xread()
 		// ../rfc/3207:107
 		if code != smtp.C220ServiceReady {
 			c.tlsResultAddFailureDetails(0, 1, c.tlsrptFailureDetails(tlsrpt.ResultSTARTTLSNotSupported, fmt.Sprintf("smtp-starttls-reply-code-%d", code)))
-			c.xerrorf(code/100 == 5, code, secode, lastLine, "%w: STARTTLS: got %d, expected 220", ErrTLS, code)
+			c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "%w: STARTTLS: got %d, expected 220", ErrTLS, code)
 		}
 
 		// We don't want to do TLS on top of c.r because it also prints protocol traces: We
@@ -786,7 +808,7 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 			// multiple MX targets, we may add multiple failures, and delivery may succeed with
 			// a later MX target with which we can do STARTTLS. ../rfc/8460:524
 			c.tlsResultAdd(0, 1, err)
-			c.xerrorf(false, 0, "", "", "%w: STARTTLS TLS handshake: %s", ErrTLS, err)
+			c.xerrorf(false, 0, "", "", nil, "%w: STARTTLS TLS handshake: %s", ErrTLS, err)
 		}
 		c.firstReadAfterHandshake = true
 		cancel()
@@ -819,6 +841,79 @@ func (c *Client) hello(ctx context.Context, tlsMode TLSMode, ehloHostname dns.Do
 		return c.auth(auth)
 	}
 	return
+}
+
+// parse text after "LIMITS", including leading space.
+func parseLimits(b []byte) (map[string]string, int, int, int) {
+	// ../rfc/9422:150
+	var o int
+	// Read next " name=value".
+	pair := func() ([]byte, []byte) {
+		if o >= len(b) || b[o] != ' ' {
+			return nil, nil
+		}
+		o++
+
+		ns := o
+		for o < len(b) {
+			c := b[o]
+			if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' {
+				o++
+			} else {
+				break
+			}
+		}
+		es := o
+		if ns == es || o >= len(b) || b[o] != '=' {
+			return nil, nil
+		}
+		o++
+		vs := o
+		for o < len(b) {
+			c := b[o]
+			if c > 0x20 && c < 0x7f && c != ';' {
+				o++
+			} else {
+				break
+			}
+		}
+		if vs == o {
+			return nil, nil
+		}
+		return b[ns:es], b[vs:o]
+	}
+	limits := map[string]string{}
+	var mailMax, rcptMax, rcptDomainMax int
+	for o < len(b) {
+		name, value := pair()
+		if name == nil {
+			// We skip the entire LIMITS extension for syntax errors. ../rfc/9422:232
+			return nil, 0, 0, 0
+		}
+		k := strings.ToUpper(string(name))
+		if _, ok := limits[k]; ok {
+			// Not specified, but we treat duplicates as error.
+			return nil, 0, 0, 0
+		}
+		limits[k] = string(value)
+		// For individual value syntax errors, we skip that value, leaving the default 0.
+		// ../rfc/9422:254
+		switch string(name) {
+		case "MAILMAX":
+			if v, err := strconv.Atoi(string(value)); err == nil && v > 0 && len(value) <= 6 {
+				mailMax = v
+			}
+		case "RCPTMAX":
+			if v, err := strconv.Atoi(string(value)); err == nil && v > 0 && len(value) <= 6 {
+				rcptMax = v
+			}
+		case "RCPTDOMAINMAX":
+			if v, err := strconv.Atoi(string(value)); err == nil && v > 0 && len(value) <= 6 {
+				rcptDomainMax = v
+			}
+		}
+	}
+	return limits, mailMax, rcptMax, rcptDomainMax
 }
 
 func addrIP(addr net.Addr) string {
@@ -878,27 +973,27 @@ func (c *Client) auth(auth func(mechanisms []string, cs *tls.ConnectionState) (s
 	}
 	a, err := auth(mechanisms, c.TLSConnectionState())
 	if err != nil {
-		c.xerrorf(true, 0, "", "", "get authentication mechanism: %s, server supports %s", err, strings.Join(c.extAuthMechanisms, ", "))
+		c.xerrorf(true, 0, "", "", nil, "get authentication mechanism: %s, server supports %s", err, strings.Join(c.extAuthMechanisms, ", "))
 	} else if a == nil {
-		c.xerrorf(true, 0, "", "", "no matching authentication mechanisms, server supports %s", strings.Join(c.extAuthMechanisms, ", "))
+		c.xerrorf(true, 0, "", "", nil, "no matching authentication mechanisms, server supports %s", strings.Join(c.extAuthMechanisms, ", "))
 	}
 	name, cleartextCreds := a.Info()
 
-	abort := func() (int, string, string) {
+	abort := func() (int, string, string, []string) {
 		// Abort authentication. ../rfc/4954:193
 		c.xwriteline("*")
 
 		// Server must respond with 501. // ../rfc/4954:195
-		code, secode, lastline, _ := c.xread()
+		code, secode, firstLine, moreLines := c.xread()
 		if code != smtp.C501BadParamSyntax {
 			c.botched = true
 		}
-		return code, secode, lastline
+		return code, secode, firstLine, moreLines
 	}
 
 	toserver, last, err := a.Next(nil)
 	if err != nil {
-		c.xerrorf(false, 0, "", "", "initial step in auth mechanism %s: %w", name, err)
+		c.xerrorf(false, 0, "", "", nil, "initial step in auth mechanism %s: %w", name, err)
 	}
 	if cleartextCreds {
 		defer c.xtrace(mlog.LevelTraceauth)()
@@ -915,36 +1010,36 @@ func (c *Client) auth(auth func(mechanisms []string, cs *tls.ConnectionState) (s
 			c.xtrace(mlog.LevelTrace) // Restore.
 		}
 
-		code, secode, lastLine, texts := c.xreadecode(last)
+		code, secode, lastText, firstLine, moreLines, _ := c.xreadecode(last)
 		if code == smtp.C235AuthSuccess {
 			if !last {
-				c.xerrorf(false, code, secode, lastLine, "server completed authentication earlier than client expected")
+				c.xerrorf(false, code, secode, firstLine, moreLines, "server completed authentication earlier than client expected")
 			}
 			return nil
 		} else if code == smtp.C334ContinueAuth {
 			if last {
-				c.xerrorf(false, code, secode, lastLine, "server requested unexpected continuation of authentication")
+				c.xerrorf(false, code, secode, firstLine, moreLines, "server requested unexpected continuation of authentication")
 			}
-			if len(texts) != 1 {
+			if len(moreLines) > 0 {
 				abort()
-				c.xerrorf(false, code, secode, lastLine, "server responded with multiline contination")
+				c.xerrorf(false, code, secode, firstLine, moreLines, "server responded with multiline contination")
 			}
-			fromserver, err := base64.StdEncoding.DecodeString(texts[0])
+			fromserver, err := base64.StdEncoding.DecodeString(lastText)
 			if err != nil {
 				abort()
-				c.xerrorf(false, code, secode, lastLine, "malformed base64 data in authentication continuation response")
+				c.xerrorf(false, code, secode, firstLine, moreLines, "malformed base64 data in authentication continuation response")
 			}
 			toserver, last, err = a.Next(fromserver)
 			if err != nil {
 				// For failing SCRAM, the client stops due to message about invalid proof. The
 				// server still sends an authentication result (it probably should send 501
 				// instead).
-				xcode, xsecode, lastline := abort()
-				c.xerrorf(false, xcode, xsecode, lastline, "client aborted authentication: %w", err)
+				xcode, xsecode, xfirstLine, xmoreLines := abort()
+				c.xerrorf(false, xcode, xsecode, xfirstLine, xmoreLines, "client aborted authentication: %w", err)
 			}
 			c.xwriteline(base64.StdEncoding.EncodeToString(toserver))
 		} else {
-			c.xerrorf(code/100 == 5, code, secode, lastLine, "unexpected response during authentication, expected 334 continue or 235 auth success")
+			c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "unexpected response during authentication, expected 334 continue or 235 auth success")
 		}
 	}
 }
@@ -1006,15 +1101,39 @@ func (c *Client) TLSConnectionState() *tls.ConnectionState {
 // Returned errors can be of type Error, one of the Err-variables in this package
 // or other underlying errors, e.g. for i/o. Use errors.Is to check.
 func (c *Client) Deliver(ctx context.Context, mailFrom string, rcptTo string, msgSize int64, msg io.Reader, req8bitmime, reqSMTPUTF8, requireTLS bool) (rerr error) {
+	_, err := c.DeliverMultiple(ctx, mailFrom, []string{rcptTo}, msgSize, msg, req8bitmime, reqSMTPUTF8, requireTLS)
+	return err
+}
+
+var errNoRecipientsPipelined = errors.New("no recipients accepted in pipelined transaction")
+var errNoRecipients = errors.New("no recipients accepted in transaction")
+
+// DeliverMultiple is like Deliver, but attempts to deliver a message to multiple
+// recipients.  Errors about the entire transaction, such as i/o errors or error
+// responses to the MAIL FROM or DATA commands, are returned by a non-nil rerr. If
+// rcptTo has a single recipient, an error to the RCPT TO command is returned in
+// rerr instead of rcptResps. Otherwise, the SMTP response for each recipient is
+// returned in rcptResps.
+//
+// The caller should take extLimit* into account when sending. And recognize
+// recipient response code "452" to mean that a recipient limit was reached,
+// another transaction can be attempted immediately after instead of marking the
+// delivery attempt as failed. Also code "552" must be treated like temporary error
+// code "452" for historic reasons.
+func (c *Client) DeliverMultiple(ctx context.Context, mailFrom string, rcptTo []string, msgSize int64, msg io.Reader, req8bitmime, reqSMTPUTF8, requireTLS bool) (rcptResps []Response, rerr error) {
 	defer c.recover(&rerr)
 
+	if len(rcptTo) == 0 {
+		return nil, fmt.Errorf("need at least one recipient")
+	}
+
 	if c.origConn == nil {
-		return ErrClosed
+		return nil, ErrClosed
 	} else if c.botched {
-		return ErrBotched
+		return nil, ErrBotched
 	} else if c.needRset {
 		if err := c.Reset(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -1022,18 +1141,19 @@ func (c *Client) Deliver(ctx context.Context, mailFrom string, rcptTo string, ms
 		// Temporary error, e.g. OpenBSD spamd does not announce 8bitmime support, but once
 		// you get through, the mail server behind it probably does. Just needs a few
 		// retries.
-		c.xerrorf(false, 0, "", "", "%w", Err8bitmimeUnsupported)
+		c.xerrorf(false, 0, "", "", nil, "%w", Err8bitmimeUnsupported)
 	}
 	if !c.extSMTPUTF8 && reqSMTPUTF8 {
 		// ../rfc/6531:313
-		c.xerrorf(false, 0, "", "", "%w", ErrSMTPUTF8Unsupported)
+		c.xerrorf(false, 0, "", "", nil, "%w", ErrSMTPUTF8Unsupported)
 	}
 	if !c.extRequireTLS && requireTLS {
-		c.xerrorf(false, 0, "", "", "%w", ErrRequireTLSUnsupported)
+		c.xerrorf(false, 0, "", "", nil, "%w", ErrRequireTLSUnsupported)
 	}
 
-	if c.extSize && msgSize > c.maxSize {
-		c.xerrorf(true, 0, "", "", "%w: message is %d bytes, remote has a %d bytes maximum size", ErrSize, msgSize, c.maxSize)
+	// Max size enforced, only when not zero. ../rfc/1870:79
+	if c.extSize && c.maxSize > 0 && msgSize > c.maxSize {
+		c.xerrorf(true, 0, "", "", nil, "%w: message is %d bytes, remote has a %d bytes maximum size", ErrSize, msgSize, c.maxSize)
 	}
 
 	var mailSize, bodyType string
@@ -1063,68 +1183,168 @@ func (c *Client) Deliver(ctx context.Context, mailFrom string, rcptTo string, ms
 	// RCPT TO: ../rfc/5321:1916
 	// DATA: ../rfc/5321:1992
 	lineMailFrom := fmt.Sprintf("MAIL FROM:<%s>%s%s%s%s", mailFrom, mailSize, bodyType, smtputf8Arg, requiretlsArg)
-	lineRcptTo := fmt.Sprintf("RCPT TO:<%s>", rcptTo)
 
 	// We are going into a transaction. We'll clear this when done.
 	c.needRset = true
 
 	if c.extPipelining {
-		c.cmds = []string{"mailfrom", "rcptto", "data"}
+		c.cmds = make([]string, 1+len(rcptTo)+1)
+		c.cmds[0] = "mailfrom"
+		for i := range rcptTo {
+			c.cmds[1+i] = "rcptto"
+		}
+		c.cmds[len(c.cmds)-1] = "data"
 		c.cmdStart = time.Now()
-		// todo future: write in a goroutine to prevent potential deadlock if remote does not consume our writes before expecting us to read. could potentially happen with greylisting and a small tcp send window?
-		c.xbwriteline(lineMailFrom)
-		c.xbwriteline(lineRcptTo)
-		c.xbwriteline("DATA")
-		c.xflush()
 
-		// We read the response to RCPT TO and DATA without panic on read error. Servers
+		// Write and read in separte goroutines. Otherwise, writing a large recipient list
+		// could block when a server doesn't read more commands before we read their
+		// response.
+		errc := make(chan error, 1)
+		// Make sure we don't return before we're done writing to the connection.
+		defer func() {
+			if errc != nil {
+				<-errc
+			}
+		}()
+		go func() {
+			var b bytes.Buffer
+			b.WriteString(lineMailFrom)
+			b.WriteString("\r\n")
+			for _, rcpt := range rcptTo {
+				b.WriteString("RCPT TO:<")
+				b.WriteString(rcpt)
+				b.WriteString(">\r\n")
+			}
+			b.WriteString("DATA\r\n")
+			_, err := c.w.Write(b.Bytes())
+			if err == nil {
+				err = c.w.Flush()
+			}
+			errc <- err
+		}()
+
+		// Read response to MAIL FROM.
+		mfcode, mfsecode, mffirstLine, mfmoreLines := c.xread()
+
+		// We read the response to RCPT TOs and DATA without panic on read error. Servers
 		// may be aborting the connection after a failed MAIL FROM, e.g. outlook when it
 		// has blocklisted your IP. We don't want the read for the response to RCPT TO to
 		// cause a read error as it would result in an unhelpful error message and a
 		// temporary instead of permanent error code.
 
-		mfcode, mfsecode, mflastline, _ := c.xread()
-		rtcode, rtsecode, rtlastline, _, rterr := c.read()
-		datacode, datasecode, datalastline, _, dataerr := c.read()
+		// Read responses to RCPT TO.
+		rcptResps = make([]Response, len(rcptTo))
+		nok := 0
+		for i := 0; i < len(rcptTo); i++ {
+			code, secode, firstLine, moreLines, err := c.read()
+			// 552 should be treated as temporary historically, ../rfc/5321:3576
+			permanent := code/100 == 5 && code != smtp.C552MailboxFull
+			rcptResps[i] = Response{permanent, code, secode, "rcptto", firstLine, moreLines, err}
+			if code == smtp.C250Completed {
+				nok++
+			}
+		}
 
+		// Read response to DATA.
+		datacode, datasecode, datafirstLine, datamoreLines, dataerr := c.read()
+
+		writeerr := <-errc
+		errc = nil
+
+		// If MAIL FROM failed, it's an error for the entire transaction. We may have been
+		// blocked.
 		if mfcode != smtp.C250Completed {
-			c.xerrorf(mfcode/100 == 5, mfcode, mfsecode, mflastline, "%w: got %d, expected 2xx", ErrStatus, mfcode)
+			if writeerr != nil || dataerr != nil {
+				c.botched = true
+			}
+			c.xerrorf(mfcode/100 == 5, mfcode, mfsecode, mffirstLine, mfmoreLines, "%w: got %d, expected 2xx", ErrStatus, mfcode)
 		}
-		if rterr != nil {
-			panic(rterr)
+
+		// If there was an i/o error writing the commands, there is no point continuing.
+		if writeerr != nil {
+			c.xbotchf(0, "", "", nil, "writing pipelined mail/rcpt/data: %w", writeerr)
 		}
-		if rtcode != smtp.C250Completed {
-			c.xerrorf(rtcode/100 == 5, rtcode, rtsecode, rtlastline, "%w: got %d, expected 2xx", ErrStatus, rtcode)
-		}
+
+		// If the data command had an i/o or protocol error, it's also a failure for the
+		// entire transaction.
 		if dataerr != nil {
 			panic(dataerr)
 		}
-		if datacode != smtp.C354Continue {
-			c.xerrorf(datacode/100 == 5, datacode, datasecode, datalastline, "%w: got %d, expected 354", ErrStatus, datacode)
+
+		// If we didn't have any successful recipient, there is no point in continuing.
+		if nok == 0 {
+			// Servers may return success for a DATA without valid recipients. Write a dot to
+			// end DATA and restore the connection to a known state.
+			// ../rfc/2920:328
+			if datacode == smtp.C354Continue {
+				_, doterr := fmt.Fprintf(c.w, ".\r\n")
+				if doterr == nil {
+					doterr = c.w.Flush()
+				}
+				if doterr == nil {
+					_, _, _, _, doterr = c.read()
+				}
+				if doterr != nil {
+					c.botched = true
+				}
+			}
+
+			if len(rcptTo) == 1 {
+				panic(Error(rcptResps[0]))
+			}
+			c.xerrorf(false, 0, "", "", nil, "%w", errNoRecipientsPipelined)
 		}
+
+		if datacode != smtp.C354Continue {
+			c.xerrorf(datacode/100 == 5, datacode, datasecode, datafirstLine, datamoreLines, "%w: got %d, expected 354", ErrStatus, datacode)
+		}
+
 	} else {
 		c.cmds[0] = "mailfrom"
 		c.cmdStart = time.Now()
 		c.xwriteline(lineMailFrom)
-		code, secode, lastline, _ := c.xread()
+		code, secode, firstLine, moreLines := c.xread()
 		if code != smtp.C250Completed {
-			c.xerrorf(code/100 == 5, code, secode, lastline, "%w: got %d, expected 2xx", ErrStatus, code)
+			c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "%w: got %d, expected 2xx", ErrStatus, code)
 		}
 
-		c.cmds[0] = "rcptto"
-		c.cmdStart = time.Now()
-		c.xwriteline(lineRcptTo)
-		code, secode, lastline, _ = c.xread()
-		if code != smtp.C250Completed {
-			c.xerrorf(code/100 == 5, code, secode, lastline, "%w: got %d, expected 2xx", ErrStatus, code)
+		rcptResps = make([]Response, len(rcptTo))
+		nok := 0
+		for i, rcpt := range rcptTo {
+			c.cmds[0] = "rcptto"
+			c.cmdStart = time.Now()
+			c.xwriteline(fmt.Sprintf("RCPT TO:<%s>", rcpt))
+			code, secode, firstLine, moreLines = c.xread()
+			if i > 0 && (code == smtp.C452StorageFull || code == smtp.C552MailboxFull) {
+				// Remote doesn't accept more recipients for this transaction. Don't send more, give
+				// remaining recipients the same error result.
+				for j := i; j < len(rcptTo); j++ {
+					rcptResps[j] = Response{false, code, secode, "rcptto", firstLine, moreLines, fmt.Errorf("no more recipients accepted in transaction")}
+				}
+				break
+			}
+			var err error
+			if code == smtp.C250Completed {
+				nok++
+			} else {
+				err = fmt.Errorf("%w: got %d, expected 2xx", ErrStatus, code)
+			}
+			rcptResps[i] = Response{code/100 == 5, code, secode, "rcptto", firstLine, moreLines, err}
+		}
+
+		if nok == 0 {
+			if len(rcptTo) == 1 {
+				panic(Error(rcptResps[0]))
+			}
+			c.xerrorf(false, 0, "", "", nil, "%w", errNoRecipients)
 		}
 
 		c.cmds[0] = "data"
 		c.cmdStart = time.Now()
 		c.xwriteline("DATA")
-		code, secode, lastline, _ = c.xread()
+		code, secode, firstLine, moreLines = c.xread()
 		if code != smtp.C354Continue {
-			c.xerrorf(code/100 == 5, code, secode, lastline, "%w: got %d, expected 354", ErrStatus, code)
+			c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "%w: got %d, expected 354", ErrStatus, code)
 		}
 	}
 
@@ -1133,13 +1353,13 @@ func (c *Client) Deliver(ctx context.Context, mailFrom string, rcptTo string, ms
 	defer c.xtrace(mlog.LevelTracedata)()
 	err := smtp.DataWrite(c.w, msg)
 	if err != nil {
-		c.xbotchf(0, "", "", "writing message as smtp data: %w", err)
+		c.xbotchf(0, "", "", nil, "writing message as smtp data: %w", err)
 	}
 	c.xflush()
 	c.xtrace(mlog.LevelTrace) // Restore.
-	code, secode, lastline, _ := c.xread()
+	code, secode, firstLine, moreLines := c.xread()
 	if code != smtp.C250Completed {
-		c.xerrorf(code/100 == 5, code, secode, lastline, "%w: got %d, expected 2xx", ErrStatus, code)
+		c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "%w: got %d, expected 2xx", ErrStatus, code)
 	}
 
 	c.needRset = false
@@ -1161,9 +1381,9 @@ func (c *Client) Reset() (rerr error) {
 	c.cmds[0] = "rset"
 	c.cmdStart = time.Now()
 	c.xwriteline("RSET")
-	code, secode, lastline, _ := c.xread()
+	code, secode, firstLine, moreLines := c.xread()
 	if code != smtp.C250Completed {
-		c.xerrorf(code/100 == 5, code, secode, lastline, "%w: got %d, expected 2xx", ErrStatus, code)
+		c.xerrorf(code/100 == 5, code, secode, firstLine, moreLines, "%w: got %d, expected 2xx", ErrStatus, code)
 	}
 	c.needRset = false
 	return
