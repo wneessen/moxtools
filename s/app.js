@@ -271,7 +271,7 @@ var api;
 		Mode["ModeTesting"] = "testing";
 		Mode["ModeNone"] = "none";
 	})(Mode = api.Mode || (api.Mode = {}));
-	api.structTypes = { "DKIMResult": true, "DMARCRecord": true, "Directive": true, "Domain": true, "DomainDANE": true, "DomainDMARC": true, "DomainDial": true, "DomainIP": true, "DomainMTASTS": true, "DomainMX": true, "DomainMXHost": true, "DomainResult": true, "DomainSMTP": true, "DomainSPF": true, "DomainTLSRPT": true, "Extension": true, "IPDomain": true, "Identity": true, "MTASTSRecord": true, "Modifier": true, "Pair": true, "Policy": true, "Proto": true, "Record": true, "SPFReceived": true, "SPFRecord": true, "STSMX": true, "Sig": true, "TLSARecord": true, "TLSConnectionState": true, "TLSRPTFailureDetails": true, "TLSRPTRecord": true, "TLSRPTResult": true, "TLSRPTResultPolicy": true, "TLSRPTSummary": true, "URI": true };
+	api.structTypes = { "DKIMResult": true, "DMARCRecord": true, "Directive": true, "Domain": true, "DomainDANE": true, "DomainDMARC": true, "DomainDial": true, "DomainIP": true, "DomainMTASTS": true, "DomainMX": true, "DomainMXHost": true, "DomainResult": true, "DomainSMTP": true, "DomainSPF": true, "DomainTLSRPT": true, "Extension": true, "IPDomain": true, "Identity": true, "MTASTSRecord": true, "MX": true, "Modifier": true, "Pair": true, "Policy": true, "Proto": true, "Record": true, "SPFReceived": true, "SPFRecord": true, "Sig": true, "TLSARecord": true, "TLSConnectionState": true, "TLSRPTFailureDetails": true, "TLSRPTRecord": true, "TLSRPTResult": true, "TLSRPTResultPolicy": true, "TLSRPTSummary": true, "URI": true };
 	api.stringsTypes = { "Align": true, "DKIMStatus": true, "DMARCPolicy": true, "IP": true, "Localpart": true, "Mode": true, "RUA": true };
 	api.intsTypes = { "TLSAMatchType": true, "TLSASelector": true, "TLSAUsage": true };
 	api.types = {
@@ -295,8 +295,8 @@ var api;
 		"DomainMTASTS": { "Name": "DomainMTASTS", "Docs": "", "Fields": [{ "Name": "DurationMS", "Docs": "", "Typewords": ["int32"] }, { "Name": "Implemented", "Docs": "", "Typewords": ["bool"] }, { "Name": "Record", "Docs": "", "Typewords": ["nullable", "MTASTSRecord"] }, { "Name": "Policy", "Docs": "", "Typewords": ["nullable", "Policy"] }, { "Name": "PolicyText", "Docs": "", "Typewords": ["string"] }, { "Name": "Error", "Docs": "", "Typewords": ["string"] }] },
 		"MTASTSRecord": { "Name": "MTASTSRecord", "Docs": "", "Fields": [{ "Name": "Version", "Docs": "", "Typewords": ["string"] }, { "Name": "ID", "Docs": "", "Typewords": ["string"] }, { "Name": "Extensions", "Docs": "", "Typewords": ["[]", "Pair"] }] },
 		"Pair": { "Name": "Pair", "Docs": "", "Fields": [{ "Name": "Key", "Docs": "", "Typewords": ["string"] }, { "Name": "Value", "Docs": "", "Typewords": ["string"] }] },
-		"Policy": { "Name": "Policy", "Docs": "", "Fields": [{ "Name": "Version", "Docs": "", "Typewords": ["string"] }, { "Name": "Mode", "Docs": "", "Typewords": ["Mode"] }, { "Name": "MX", "Docs": "", "Typewords": ["[]", "STSMX"] }, { "Name": "MaxAgeSeconds", "Docs": "", "Typewords": ["int32"] }, { "Name": "Extensions", "Docs": "", "Typewords": ["[]", "Pair"] }] },
-		"STSMX": { "Name": "STSMX", "Docs": "", "Fields": [{ "Name": "Wildcard", "Docs": "", "Typewords": ["bool"] }, { "Name": "Domain", "Docs": "", "Typewords": ["Domain"] }] },
+		"Policy": { "Name": "Policy", "Docs": "", "Fields": [{ "Name": "Version", "Docs": "", "Typewords": ["string"] }, { "Name": "Mode", "Docs": "", "Typewords": ["Mode"] }, { "Name": "MX", "Docs": "", "Typewords": ["[]", "MX"] }, { "Name": "MaxAgeSeconds", "Docs": "", "Typewords": ["int32"] }, { "Name": "Extensions", "Docs": "", "Typewords": ["[]", "Pair"] }] },
+		"MX": { "Name": "MX", "Docs": "", "Fields": [{ "Name": "Wildcard", "Docs": "", "Typewords": ["bool"] }, { "Name": "Domain", "Docs": "", "Typewords": ["Domain"] }] },
 		"DomainMX": { "Name": "DomainMX", "Docs": "", "Fields": [{ "Name": "DurationMS", "Docs": "", "Typewords": ["int32"] }, { "Name": "Have", "Docs": "", "Typewords": ["bool"] }, { "Name": "OrigNextHopAuthentic", "Docs": "", "Typewords": ["bool"] }, { "Name": "ExpandedNextHopAuthentic", "Docs": "", "Typewords": ["bool"] }, { "Name": "ExpandedNextHop", "Docs": "", "Typewords": ["Domain"] }, { "Name": "Permanent", "Docs": "", "Typewords": ["bool"] }, { "Name": "Error", "Docs": "", "Typewords": ["string"] }] },
 		"DomainMXHost": { "Name": "DomainMXHost", "Docs": "", "Fields": [{ "Name": "DurationMS", "Docs": "", "Typewords": ["int32"] }, { "Name": "Host", "Docs": "", "Typewords": ["IPDomain"] }, { "Name": "MTASTSError", "Docs": "", "Typewords": ["string"] }, { "Name": "IP", "Docs": "", "Typewords": ["DomainIP"] }, { "Name": "DANE", "Docs": "", "Typewords": ["DomainDANE"] }, { "Name": "Dial", "Docs": "", "Typewords": ["DomainDial"] }, { "Name": "SMTP", "Docs": "", "Typewords": ["DomainSMTP"] }] },
 		"IPDomain": { "Name": "IPDomain", "Docs": "", "Fields": [{ "Name": "IP", "Docs": "", "Typewords": ["IP"] }, { "Name": "Domain", "Docs": "", "Typewords": ["Domain"] }] },
@@ -344,7 +344,7 @@ var api;
 		MTASTSRecord: (v) => api.parse("MTASTSRecord", v),
 		Pair: (v) => api.parse("Pair", v),
 		Policy: (v) => api.parse("Policy", v),
-		STSMX: (v) => api.parse("STSMX", v),
+		MX: (v) => api.parse("MX", v),
 		DomainMX: (v) => api.parse("DomainMX", v),
 		DomainMXHost: (v) => api.parse("DomainMXHost", v),
 		IPDomain: (v) => api.parse("IPDomain", v),
