@@ -6,9 +6,9 @@ toolchain go1.22.0
 
 require (
 	github.com/mjl-/adns v0.0.0-20240309142737-2a1aacf346dc
-	github.com/mjl-/mox v0.0.10
+	github.com/mjl-/mox v0.0.11
 	github.com/mjl-/sherpa v0.6.7
-	github.com/mjl-/sherpadoc v0.0.12
+	github.com/mjl-/sherpadoc v0.0.14
 	github.com/mjl-/sherpaprom v0.0.2
 	github.com/mjl-/sherpats v0.0.6
 	github.com/prometheus/client_golang v1.18.0

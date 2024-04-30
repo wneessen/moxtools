@@ -1016,7 +1016,7 @@
 					"Docs": "",
 					"Typewords": [
 						"[]",
-						"STSMX"
+						"MX"
 					]
 				},
 				{
@@ -1037,8 +1037,8 @@
 			]
 		},
 		{
-			"Name": "STSMX",
-			"Docs": "STSMX is an allowlisted MX host name/pattern.\ntodo: find a way to name this just STSMX without getting duplicate names for \"MX\" in the sherpa api.",
+			"Name": "MX",
+			"Docs": "MX is an allowlisted MX host name/pattern.",
 			"Fields": [
 				{
 					"Name": "Wildcard",

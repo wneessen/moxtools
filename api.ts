@@ -193,14 +193,13 @@ export interface Pair {
 export interface Policy {
 	Version: string  // "STSv1"
 	Mode: Mode
-	MX?: STSMX[] | null
+	MX?: MX[] | null
 	MaxAgeSeconds: number  // How long this policy can be cached. Suggested values are in weeks or more.
 	Extensions?: Pair[] | null
 }
 
-// STSMX is an allowlisted MX host name/pattern.
-// todo: find a way to name this just STSMX without getting duplicate names for "MX" in the sherpa api.
-export interface STSMX {
+// MX is an allowlisted MX host name/pattern.
+export interface MX {
 	Wildcard: boolean  // "*." wildcard, e.g. if a subdomain matches. A wildcard must match exactly one label. *.example.com matches mail.example.com, but not example.com, and not foor.bar.example.com.
 	Domain: Domain
 }
@@ -391,7 +390,7 @@ export enum Mode {
 // be an IPv4 address.
 export type IP = string
 
-export const structTypes: {[typename: string]: boolean} = {"DKIMResult":true,"DMARCRecord":true,"Directive":true,"Domain":true,"DomainDANE":true,"DomainDMARC":true,"DomainDial":true,"DomainIP":true,"DomainMTASTS":true,"DomainMX":true,"DomainMXHost":true,"DomainResult":true,"DomainSMTP":true,"DomainSPF":true,"DomainTLSRPT":true,"Extension":true,"IPDomain":true,"Identity":true,"MTASTSRecord":true,"Modifier":true,"Pair":true,"Policy":true,"Proto":true,"Record":true,"SPFReceived":true,"SPFRecord":true,"STSMX":true,"Sig":true,"TLSARecord":true,"TLSConnectionState":true,"TLSRPTFailureDetails":true,"TLSRPTRecord":true,"TLSRPTResult":true,"TLSRPTResultPolicy":true,"TLSRPTSummary":true,"URI":true}
+export const structTypes: {[typename: string]: boolean} = {"DKIMResult":true,"DMARCRecord":true,"Directive":true,"Domain":true,"DomainDANE":true,"DomainDMARC":true,"DomainDial":true,"DomainIP":true,"DomainMTASTS":true,"DomainMX":true,"DomainMXHost":true,"DomainResult":true,"DomainSMTP":true,"DomainSPF":true,"DomainTLSRPT":true,"Extension":true,"IPDomain":true,"Identity":true,"MTASTSRecord":true,"MX":true,"Modifier":true,"Pair":true,"Policy":true,"Proto":true,"Record":true,"SPFReceived":true,"SPFRecord":true,"Sig":true,"TLSARecord":true,"TLSConnectionState":true,"TLSRPTFailureDetails":true,"TLSRPTRecord":true,"TLSRPTResult":true,"TLSRPTResultPolicy":true,"TLSRPTSummary":true,"URI":true}
 export const stringsTypes: {[typename: string]: boolean} = {"Align":true,"DKIMStatus":true,"DMARCPolicy":true,"IP":true,"Localpart":true,"Mode":true,"RUA":true}
 export const intsTypes: {[typename: string]: boolean} = {"TLSAMatchType":true,"TLSASelector":true,"TLSAUsage":true}
 export const types: TypenameMap = {
@@ -415,8 +414,8 @@ export const types: TypenameMap = {
 	"DomainMTASTS": {"Name":"DomainMTASTS","Docs":"","Fields":[{"Name":"DurationMS","Docs":"","Typewords":["int32"]},{"Name":"Implemented","Docs":"","Typewords":["bool"]},{"Name":"Record","Docs":"","Typewords":["nullable","MTASTSRecord"]},{"Name":"Policy","Docs":"","Typewords":["nullable","Policy"]},{"Name":"PolicyText","Docs":"","Typewords":["string"]},{"Name":"Error","Docs":"","Typewords":["string"]}]},
 	"MTASTSRecord": {"Name":"MTASTSRecord","Docs":"","Fields":[{"Name":"Version","Docs":"","Typewords":["string"]},{"Name":"ID","Docs":"","Typewords":["string"]},{"Name":"Extensions","Docs":"","Typewords":["[]","Pair"]}]},
 	"Pair": {"Name":"Pair","Docs":"","Fields":[{"Name":"Key","Docs":"","Typewords":["string"]},{"Name":"Value","Docs":"","Typewords":["string"]}]},
-	"Policy": {"Name":"Policy","Docs":"","Fields":[{"Name":"Version","Docs":"","Typewords":["string"]},{"Name":"Mode","Docs":"","Typewords":["Mode"]},{"Name":"MX","Docs":"","Typewords":["[]","STSMX"]},{"Name":"MaxAgeSeconds","Docs":"","Typewords":["int32"]},{"Name":"Extensions","Docs":"","Typewords":["[]","Pair"]}]},
-	"STSMX": {"Name":"STSMX","Docs":"","Fields":[{"Name":"Wildcard","Docs":"","Typewords":["bool"]},{"Name":"Domain","Docs":"","Typewords":["Domain"]}]},
+	"Policy": {"Name":"Policy","Docs":"","Fields":[{"Name":"Version","Docs":"","Typewords":["string"]},{"Name":"Mode","Docs":"","Typewords":["Mode"]},{"Name":"MX","Docs":"","Typewords":["[]","MX"]},{"Name":"MaxAgeSeconds","Docs":"","Typewords":["int32"]},{"Name":"Extensions","Docs":"","Typewords":["[]","Pair"]}]},
+	"MX": {"Name":"MX","Docs":"","Fields":[{"Name":"Wildcard","Docs":"","Typewords":["bool"]},{"Name":"Domain","Docs":"","Typewords":["Domain"]}]},
 	"DomainMX": {"Name":"DomainMX","Docs":"","Fields":[{"Name":"DurationMS","Docs":"","Typewords":["int32"]},{"Name":"Have","Docs":"","Typewords":["bool"]},{"Name":"OrigNextHopAuthentic","Docs":"","Typewords":["bool"]},{"Name":"ExpandedNextHopAuthentic","Docs":"","Typewords":["bool"]},{"Name":"ExpandedNextHop","Docs":"","Typewords":["Domain"]},{"Name":"Permanent","Docs":"","Typewords":["bool"]},{"Name":"Error","Docs":"","Typewords":["string"]}]},
 	"DomainMXHost": {"Name":"DomainMXHost","Docs":"","Fields":[{"Name":"DurationMS","Docs":"","Typewords":["int32"]},{"Name":"Host","Docs":"","Typewords":["IPDomain"]},{"Name":"MTASTSError","Docs":"","Typewords":["string"]},{"Name":"IP","Docs":"","Typewords":["DomainIP"]},{"Name":"DANE","Docs":"","Typewords":["DomainDANE"]},{"Name":"Dial","Docs":"","Typewords":["DomainDial"]},{"Name":"SMTP","Docs":"","Typewords":["DomainSMTP"]}]},
 	"IPDomain": {"Name":"IPDomain","Docs":"","Fields":[{"Name":"IP","Docs":"","Typewords":["IP"]},{"Name":"Domain","Docs":"","Typewords":["Domain"]}]},
@@ -465,7 +464,7 @@ export const parser = {
 	MTASTSRecord: (v: any) => parse("MTASTSRecord", v) as MTASTSRecord,
 	Pair: (v: any) => parse("Pair", v) as Pair,
 	Policy: (v: any) => parse("Policy", v) as Policy,
-	STSMX: (v: any) => parse("STSMX", v) as STSMX,
+	MX: (v: any) => parse("MX", v) as MX,
 	DomainMX: (v: any) => parse("DomainMX", v) as DomainMX,
 	DomainMXHost: (v: any) => parse("DomainMXHost", v) as DomainMXHost,
 	IPDomain: (v: any) => parse("IPDomain", v) as IPDomain,

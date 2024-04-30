@@ -700,7 +700,7 @@ func (API) DomainCheck(ctx context.Context, domain string) (dr DomainResult) {
 			}()
 
 			dialedIPs := map[string][]net.IP{}
-			authentic, expandedAuthentic, expandedHost, ips, dualstack, err := smtpclient.GatherIPs(opctx, log.Logger, resolver, mx.Host, dialedIPs)
+			authentic, expandedAuthentic, expandedHost, ips, dualstack, err := smtpclient.GatherIPs(opctx, log.Logger, resolver, "ip", mx.Host, dialedIPs)
 			mx.IP = DomainIP{timeSince(t0), authentic, expandedAuthentic, expandedHost, ips, dualstack, errmsg(err)}
 			if err != nil {
 				return

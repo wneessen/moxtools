@@ -5,7 +5,7 @@ build:
 	# build early to catch syntax errors
 	CGO_ENABLED=0 go build
 	CGO_ENABLED=0 go vet ./...
-	CGO_ENABLED=0 go run vendor/github.com/mjl-/sherpadoc/cmd/sherpadoc/*.go -adjust-function-names none API >s/api.json
+	CGO_ENABLED=0 go run vendor/github.com/mjl-/sherpadoc/cmd/sherpadoc/*.go -adjust-function-names none -rename 'dmarc Policy DMARCPolicy' API >s/api.json
 	go run vendor/github.com/mjl-/sherpats/cmd/sherpats/main.go -bytes-to-string -slices-nullable -maps-nullable -nullable-optional -namespace api api <s/api.json >api.ts
 	# build again, api json files above are embedded
 	CGO_ENABLED=0 go build
