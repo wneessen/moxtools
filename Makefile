@@ -15,7 +15,8 @@ build1:
 	CGO_ENABLED=0 go build
 
 check:
-	staticcheck ./...
+	# SA1019 is for warning about sslv3, we don't use it
+	staticcheck -checks inherit,-SA1019 ./...
 	GOARCH=386 CGO_ENABLED=0 go vet ./...
 
 # having "err" shadowed is common, best to not have others
