@@ -33,6 +33,7 @@ var Pedantic bool
 
 var (
 	ErrBadContentType = errors.New("bad content-type")
+	ErrHeader         = errors.New("bad message header")
 )
 
 var (
@@ -394,6 +395,8 @@ func newPart(log mlog.Log, strict bool, r io.ReaderAt, offset int64, parent *Par
 }
 
 // Header returns the parsed header of this part.
+//
+// Returns a ErrHeader for messages with invalid header syntax.
 func (p *Part) Header() (textproto.MIMEHeader, error) {
 	if p.header != nil {
 		return p.header, nil
@@ -431,6 +434,12 @@ func parseHeader(r io.Reader) (textproto.MIMEHeader, error) {
 	}
 	msg, err := mail.ReadMessage(bytes.NewReader(buf))
 	if err != nil {
+		// Recognize parsing errors from net/mail.ReadMessage.
+		// todo: replace with own message parsing code that returns proper error types.
+		errstr := err.Error()
+		if strings.HasPrefix(errstr, "malformed initial line:") || strings.HasPrefix(errstr, "malformed header line:") {
+			err = fmt.Errorf("%w: %v", ErrHeader, err)
+		}
 		return zero, err
 	}
 	return textproto.MIMEHeader(msg.Header), nil
@@ -489,7 +498,12 @@ func parseEnvelope(log mlog.Log, h mail.Header) (*Envelope, error) {
 
 func parseAddressList(log mlog.Log, h mail.Header, k string) []Address {
 	// todo: possibly work around ios mail generating incorrect q-encoded "phrases" with unencoded double quotes? ../rfc/2047:382
-	l, err := h.AddressList(k)
+	v := h.Get(k)
+	if v == "" {
+		return nil
+	}
+	parser := mail.AddressParser{WordDecoder: &wordDecoder}
+	l, err := parser.ParseList(v)
 	if err != nil {
 		return nil
 	}
@@ -497,9 +511,9 @@ func parseAddressList(log mlog.Log, h mail.Header, k string) []Address {
 	for _, a := range l {
 		// todo: parse more fully according to ../rfc/5322:959
 		var user, host string
-		addr, err := smtp.ParseAddress(a.Address)
+		addr, err := smtp.ParseNetMailAddress(a.Address)
 		if err != nil {
-			log.Infox("parsing address (continuing)", err, slog.Any("address", a.Address))
+			log.Infox("parsing address (continuing)", err, slog.Any("netmailaddress", a.Address))
 		} else {
 			user = addr.Localpart.String()
 			host = addr.Domain.ASCII

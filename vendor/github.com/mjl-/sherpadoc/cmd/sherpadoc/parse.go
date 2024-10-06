@@ -186,6 +186,9 @@ func parseSection(t *doc.Type, pp *parsedPackage) *section {
 func ensureNamedType(t *doc.Type, sec *section, pp *parsedPackage) (name string) {
 	if s, ok := renames[renameSrc{pp.Pkg.Name, t.Name}]; ok {
 		name = s
+		if sherpadoc.IsBasicType(s) {
+			return
+		}
 	} else {
 		name = t.Name
 	}
@@ -708,7 +711,7 @@ func (pp *parsedPackage) ensurePackageParsed(importPath string) *parsedPackage {
 		astPkgs, err := parser.ParseDir(fset, localPath, nil, parser.ParseComments|parser.DeclarationErrors)
 		check(err, "parsing go files from "+localPath)
 		for name, pkg := range astPkgs {
-			if strings.HasSuffix(name, "_test") {
+			if name == "main" || strings.HasSuffix(name, "_test") {
 				continue
 			}
 			if astPkg != nil {
